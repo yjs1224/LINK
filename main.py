@@ -57,49 +57,7 @@ def load_model(Configs, VOCAB_SIZE=None, checkpoint=None):
 
 
     if not Configs.use_plm:
-        if Configs.model.lower() in ["ts-csw", "cnn"]:
-            Model_Configs = Configs.CNN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = CNN.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["birnn", "rnn"]:
-            Model_Configs = Configs.RNN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = BiRNN.TC(**{**Model_Configs, "class_num": Configs.class_num})
-        elif Configs.model.lower() in ["fcn", "fc"]:
-            Model_Configs = Configs.FCN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = FCN.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["lstmatt"]:
-            Model_Configs = Configs.LSTMATT
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = LSTMATT.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["r-bilstm-c", "r-b-c", "rbc", "rbilstmc"]:
-            Model_Configs = Configs.RBiLSTMC
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = RBC.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["bilstmdense", "bilstm-dense", "bilstm_dense", "bi-lstm-dense"]:
-            Model_Configs = Configs.BiLSTMDENSE
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = BLSTMDENSE.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["sesy"]:
-            Model_Configs = Configs.SESY
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = SESY.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["gnn"]:
-            Model_Configs = Configs.GNN
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = GNN.TC(**{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["ke"]:
-            Model_Configs = Configs.KE
-            concept_embedding_path = "aclImdb_840B.300d.concept_embedding.pkl" if Configs.Dataset.name == "aclImdb" else "840B.300d.concept_embedding.pkl"
-            Model_Configs.vocab_size = VOCAB_SIZE
-            model = KE.TC(**{**Model_Configs, "class_num": Configs.class_num, "concept_embedding_path": concept_embedding_path})
-        else:
-            logger.error("no such model, exit")
-            exit()
-        if checkpoint is not None:
-            logger.info("---------------------loading model from {}------------\n\n".format(checkpoint))
-            model = torch.load(os.path.join(checkpoint, "pytorch_model.bin"))
+       pass
     else:
         if checkpoint is not None:
             logger.info("---------------------loading model from {}------------\n\n".format(checkpoint))
@@ -123,18 +81,6 @@ def load_model(Configs, VOCAB_SIZE=None, checkpoint=None):
             Model_Configs = Configs.LSTMATT
             model = LSTMATT.BERT_TC.from_pretrained(model_name_or_path,
                                                 **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["r-bilstm-c", "r-b-c", "rbc", "rbilstmc"]:
-            Model_Configs = Configs.RBiLSTMC
-            model = RBC.BERT_TC.from_pretrained(model_name_or_path,
-                                                    **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["bilstmdense", "bilstm-dense", "bilstm_dense", "bi-lstm-dense"]:
-            Model_Configs = Configs.BiLSTMDENSE
-            model = BLSTMDENSE.BERT_TC.from_pretrained(model_name_or_path,
-                                                    **{**Model_Configs, "class_num": Configs.class_num, })
-        elif Configs.model.lower() in ["sesy"]:
-            Model_Configs = Configs.SESY
-            model = SESY.BERT_TC.from_pretrained(model_name_or_path,
-                                                    **{**Model_Configs, "class_num": Configs.class_num, })
         elif Configs.model.lower() in ["ke"]:
             Model_Configs = Configs.KE
             concept_embedding_path = "aclImdb_840B.300d.concept_embedding.pkl" if Configs.Dataset.name == "aclImdb" else "840B.300d.concept_embedding.pkl"
@@ -155,142 +101,9 @@ def load_model(Configs, VOCAB_SIZE=None, checkpoint=None):
     return model
 
 
-def train_with_helper(data_helper,model,Configs,):
-    os.makedirs(os.path.join(Configs.out_dir, Configs.checkpoint),exist_ok=True)
-    checkpoint = os.path.join(Configs.out_dir, Configs.checkpoint, "maxacc.pth")
-    Training_Configs = Configs.Training
-    logger.info("Training Configs")
-    logger.info(Training_Configs)
-    logger.info("-----------------------------------------------")
-    t_total = data_helper.train_num// Training_Configs.batch_size * Training_Configs.epoch
-    num_warmup_steps = int(Training_Configs.warmup_ratio * t_total)
-    no_decay = ["bias", "LayerNorm.weight"]
-    optimizer_grouped_parameters = [
-        {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-            "weight_decay": Training_Configs.weight_decay,
-        },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-    ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=Training_Configs.learning_rate, eps=Training_Configs.adam_epsilon)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=t_total
-    )
-    # optimizer = optim.SGD(model.parameters(), lr=Training_Configs.learning_rate, momentum=0.9)
-    early_stop = 0
-    best_acc = 0
-    best_test_loss = 1000
-    best_precison = 0
-    best_recall = 0
-    best_F1 = 0
-
-    logger.info("------------number of instance-------------")
-    logger.info(format(f"train\t{data_helper.train_num}"))
-    logger.info(format(f"val  \t{data_helper.val_num}"))
-    logger.info(format(f"test \t{data_helper.test_num}"))
-
-    for epoch in range(Training_Configs.epoch):
-        model.train()
-        generator_train = data_helper.train_generator(Training_Configs.batch_size)
-        train_loss = []
-        train_acc = []
-        while True:
-            try:
-                text, label = generator_train.__next__()
-            except:
-                break
-            optimizer.zero_grad()
-            loss,y = model(torch.from_numpy(text).long().to(Configs.device), torch.from_numpy(label).long().to(Configs.device))
-            # loss = criteration(y, torch.from_numpy(label).long().to(Training_configs.device))
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-            train_loss.append(loss.item())
-            y = y.cpu().detach().numpy()
-            train_acc += [1 if np.argmax(y[i]) == label[i] else 0 for i in range(len(y))]
-
-        val_loss, val_acc, val_precision, val_recall, val_Fscore = eval_with_helper(data_helper,model,Configs)
-
-        logger.info(
-            "epoch {:d}, training loss {:.4f}, train acc {:.4f}, val loss {:.4f}, val acc {:.4f}, val pre {:.4f},val recall {:.4f},val F1 {:.4f}"
-                .format(epoch + 1, np.mean(train_loss), np.mean(train_acc), val_loss, val_acc, val_precision, val_recall,
-                        val_Fscore))
-
-
-        if val_acc > best_acc:
-            state = {'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch, "scheduler":scheduler.state_dict(),
-                     "training_args":Configs.state_dict,"val loss": val_loss, "val acc": np.mean(val_acc)}
-            torch.save(state, checkpoint)
-            best_test_loss = val_loss
-            best_acc = val_acc
-            best_precison = val_precision
-            best_recall = val_recall
-            best_F1 = val_Fscore
-            early_stop = 0
-        else:
-            early_stop += 1
-        if early_stop >= Training_Configs.early_stop :
-            break
-
-    logger.info("--------------start calculate metrics--------------")
-
-    state = torch.load(checkpoint)
-    optimizer.load_state_dict(state["optimizer"])
-    scheduler.load_state_dict(state["scheduler"])
-    model.load_state_dict(state["model"])
-    test_loss, test_acc, test_precision, test_recall, test_Fscore = eval_with_helper(data_helper,model,Configs,"test")
-    logger.info('val: loss: {:.4f}, acc: {:.4f}, pre {:.4f}, recall {:.4f}, F1 {:.4f}'.format(best_test_loss, best_acc,
-                                                                                              best_precison, best_recall, best_F1))
-    logger.info(
-        "test: loss {:.4f}, acc {:.4f}, pre {:.4f}, recall {:.4f}, F1 {:.4f}".format(test_loss, test_acc, test_precision,
-                                                                                     test_recall, test_Fscore))
-    return test_acc, test_precision, test_recall, test_Fscore
-
-
-def eval_with_helper(data_helper,model, Configs, eval_or_test="eval"):
-    Training_Configs = Configs.Training
-    model.eval()
-    generator =  data_helper.val_generator(Training_Configs.batch_size) if eval_or_test == "eval" \
-        else data_helper.test_generator(Training_Configs.batch_size)
-    test_loss = 0
-    test_acc = []
-    test_tp = []
-    tfn = []
-    tpfn = []
-    length_sum = 0
-
-    while True:
-        with torch.no_grad():
-            try:
-                text, label = generator.__next__()
-            except:
-                break
-            loss,y = model(torch.from_numpy(text).long().to(Configs.device),
-                            torch.from_numpy(label).long().to(Configs.device))
-            # loss = criteration(y, torch.from_numpy(label).long().to(Training_configs.device))
-            loss = loss.cpu().numpy()
-            test_loss += loss * len(text)
-            length_sum += len(text)
-            y = y.cpu().numpy()
-            label_pred = np.argmax(y, axis=-1)
-            test_acc += [1 if np.argmax(y[i]) == label[i] else 0 for i in range(len(y))]
-            test_tp += [1 if np.argmax(y[i]) == label[i] and label[i] == 1 else 0 for i in range(len(y))]
-            tfn += [1 if np.argmax(y[i]) == 1 else 0 for i in range(len(y))]
-            tpfn += [1 if label[i] == 1 else 0 for i in range(len(y))]
-
-    test_loss = test_loss / length_sum
-    acc = np.mean(test_acc)
-    tpsum = np.sum(test_tp)
-    test_precision = tpsum / (np.sum(tfn) + 1e-5)
-    test_recall = tpsum / np.sum(tpfn)
-    test_Fscore = 2 * test_precision * test_recall / (test_recall + test_precision + 1e-10)
-    return test_loss, acc, test_precision, test_recall, test_Fscore
-
-
 def train(model, Configs, tokenizer, kn):
     logger.info("knowledge number : {}".format(kn))
     kwargs = {}
-    # if Configs.model.lower() in ["gnn"] or (Configs.model=="KE" and Configs.KE.tfe.lower() in ["gnn"]):
     if Configs.model.lower() in ["gnn", "cnn", "birnn", "fcn", "lstmatt"] or \
                              (Configs.model=="KE" and Configs.KE.tfe.lower() in [ "gnn", "cnn", "rnn", "fcn", "lstmatt"]) :
         kwargs = {"use_vocab":True, "vocab_size":model.vocab_size, "kn":kn}
@@ -384,12 +197,7 @@ def train(model, Configs, tokenizer, kn):
             inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2], "labels": batch[3]}
             if Configs.task_name == "graph_steganalysis" or Configs.task_name == "gss":
                 inputs = {**inputs,"graph":batch[4]}
-            # inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2], "labels": batch[3],
-            #           "concept_ids": batch[4], "distance": batch[6], "head": batch[7], "tail": batch[8],
-            #           "relation": batch[9]}
             if Configs.task_name == "KE-steganalysis" or Configs.task_name == "KE-graph_steganalysis":
-                # inputs = {**inputs, "concept_ids": batch[4], "distance": batch[6], "head": batch[7], "tail": batch[8],
-                #       "relation": batch[9], "triple_label": batch[10]}
                 inputs = {**inputs, "concept_ids": batch[4], "concepts_adj": batch[5]}
                 if Configs.task_name == "KE-graph_steganalysis":
                     inputs = {**inputs, "graph": batch[6]}
@@ -531,9 +339,6 @@ def evaluate(model, tokenizer, Configs, task_name, split="dev", prefix="", use_t
                           "concepts_adj":batch[5]}
                 if Configs.task_name == "KE-graph_steganalysis" :
                     inputs = {**inputs,"graph":batch[6][:, :batch_seq_length].contiguous()}
-            # inputs["token_type_ids"] = (
-            #     batch[2][:, :batch_seq_length].contiguous() if Configs.model_type in ["bert", "xlnet", "albert"] else None
-            # )  # XLM, DistilBERT, RoBERTa, and XLM-RoBERTa don't use segment_ids
         else:
             inputs = {"input_ids": batch[0], "attention_mask": batch[1],  "token_type_ids":batch[2],"labels": batch[3]}
             if Configs.task_name == "KE-steganalysis" or Configs.task_name == "KE-graph_steganalysis":
@@ -543,9 +348,6 @@ def evaluate(model, tokenizer, Configs, task_name, split="dev", prefix="", use_t
 
         if Configs.task_name == "graph_steganalysis" or Configs.task_name == "gss" :
             inputs = {**inputs,"graph":batch[4]}
-            # inputs["token_type_ids"] = (
-            #     batch[2][:, :batch_seq_length].contiguous() if Configs.model_type in ["bert", "xlnet", "albert"] else None
-            # )  # XLM, DistilBERT, RoBERTa, and XLM-RoBERTa don't use segment_ids
 
         with torch.no_grad():
             outputs = model(**inputs)
@@ -645,11 +447,6 @@ def load_and_cache_examples(Dataset_Configs, task, tokenizer, split="train", ove
         )
         dataset = torch.load(cached_tensors_file)
     return dataset
-    # if task == "record" and split in ["dev", "test"]:
-    #     answers = processor.get_answers(Dataset_Configs.csv_dir, split)
-    #     return dataset, answers
-    # else:
-    #     return dataset
 
 
 def main(Configs, kn):
@@ -732,11 +529,8 @@ def main(Configs, kn):
             write2file(val_texts, val_labels, os.path.join(Dataset_Configs.csv_dir, "val.csv"))
             write2file(test_texts, test_labels, os.path.join(Dataset_Configs.csv_dir, "test.csv"))
         tokenizer = AutoTokenizer.from_pretrained(Configs.model_name_or_path,)
-        # VOCAB_SIZE = tokenizer.vocab_size
-        # VOCAB_SIZE = 5000 if Configs.model.lower() in ["gnn",] or (Configs.model=="KE" and Configs.KE.tfe.lower() in ["gnn",] ) else tokenizer.vocab_size
         VOCAB_SIZE = 5000 if Configs.model.lower() in ["gnn", "cnn", "birnn", "fcn", "lstmatt"] or \
                              (Configs.model=="KE" and Configs.KE.tfe.lower() in [ "gnn", "cnn", "rnn", "fcn", "lstmatt"]) else tokenizer.vocab_size
-        # VOCAB_SIZE = tokenizer.vocab_size if Configs.model.lower() not in ["gnn"] else 5000
 
     else:
         # not recommend
@@ -781,11 +575,6 @@ def main(Configs, kn):
             tokenizer = AutoTokenizer.from_pretrained(checkpoint, do_lower_case=Training_Configs.do_lower_case)
             prefix = checkpoint.split("/")[-1]
             model = load_model(Configs, VOCAB_SIZE=tokenizer.vocab_size,checkpoint=checkpoint)
-            # if not Configs.use_plm:
-            #     model = torch.load(os.path.join(checkpoint, "pytorch_model.bin"))
-            #     logger.info("--------------load model without pretrained language model-----------------")
-            # else:
-            #     logger.info("--------------load model with pretrained language model--------------------")
             result, preds, ex_ids = evaluate(model, tokenizer, Configs, Configs.task_name, split="test", prefix=prefix)
             test_acc = result["accuracy"]
             test_precision = result["precision"]
@@ -798,11 +587,6 @@ def main(Configs, kn):
     else:
         test_acc, test_precision, test_recall, test_Fscore = train_with_helper(data_helper,model,Configs)
         return test_acc, test_precision, test_recall, test_Fscore
-    # record_file = Configs.record_file if Configs.record_file is not None else "record.txt"
-    # result_path = os.path.join(Configs.out_dir, time_stamp+"----"+record_file)
-    # with open(result_path, "w", encoding="utf-8") as f:
-    #     f.write("test phase:\naccuracy\t{:.4f}\nprecision\t{:.4f}\nrecall\t{:.4f}\nf1_score\t{:.4f}"
-    #             .format(test_acc*100,test_precision*100,test_recall*100,test_Fscore*100))
 
 
 
