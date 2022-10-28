@@ -142,18 +142,6 @@ class TC_base(nn.Module):
         self.hidden_size = hidden_dim
         self.bidirectional = bidirectional
         self.dropout = nn.Dropout(self.dropout_prob)
-        # self.lstm = lstm(
-        #     input_size=self.in_features,
-        #     hidden_size=self.hidden_size,
-        #     bidirectional=True
-        # )
-        # self.attn = Attention(
-        #     embed_dim=self.hidden_size,
-        #     hidden_dim=self.hidden_size,
-        #     n_head=1,
-        #     score_function='mlp',
-        #     dropout=self.dropout_prob
-        # )
         self.lstm = nn.LSTM(self.in_features, self.hidden_size, 1, dropout=self.dropout_prob, bidirectional=True)
         self.attn = nn.MultiheadAttention(embed_dim=self.hidden_size * 2, num_heads=1, dropout=self.dropout_prob)
         self.pool = nn.AdaptiveAvgPool1d(1)
@@ -202,39 +190,3 @@ class TC(nn.Module):
         logits = self.classifier(input_lstm,mask,input_ids_len)
         loss = self.criteration(logits,labels)
         return loss,logits
-
-
-class BERT_TC(BertPreTrainedModel):
-    def __init__(self, config, **kwargs):
-        super().__init__(config)
-        self.bert_config = config
-        self.bert = BertModel(self.bert_config)
-        self.embed_size = config.hidden_size
-        self.hidden_size = kwargs["hidden_dim"]
-        self.num_labels = kwargs["class_num"]
-        self.dropout_prob = kwargs["dropout_rate"]
-        self.bidirectional = kwargs["bidirectional"]
-        self.classifier = TC_base(self.embed_size, self.hidden_size, self.num_labels, self.dropout_prob,
-                                  self.bidirectional)
-        if kwargs["criteration"] == "CrossEntropyLoss":
-            self.criteration = nn.CrossEntropyLoss()
-        else:
-            # default loss
-            self.criteration = nn.CrossEntropyLoss()
-        # self.it_weights()
-
-    def forward(self, input_ids, labels, attention_mask, token_type_ids):
-        input_ids_len = torch.sum(input_ids != 0, dim=-1).float()
-        outputs = self.bert(input_ids, attention_mask, token_type_ids)
-        embedding = outputs[0]
-        mask = torch.ones_like(input_ids.long())
-        mask[input_ids.long() != 0 ] = 0
-        logits = self.classifier(embedding,mask,input_ids_len)
-        loss = self.criteration(logits,labels)
-        return loss,logits
-
-
-    def extra_repr(self) -> str:
-        return 'bert word embedding dim:{}'.format(
-            self.embed_size
-        )
