@@ -123,16 +123,6 @@ class KGSteganalysisProcessor(object):
         return self.get_examples(dir, type="init")
 
     def _create_examples(self, dir, type=None):
-        #if type in ["train", "val", "test"]:
-        #    if type == "train":
-        #        #print(self.examples[:int(len(self.examples)*self.split_ratios[0])])
-#
-        #        return self.examples[:int(len(self.examples)*self.split_ratios[0])]
-        #    if type == "val":
-        #        return self.examples[int(len(self.examples) * self.split_ratios[0]):int(len(self.examples) * (self.split_ratios[0]+self.split_ratios[1]))]
-        #    if type == "test":
-        #        return self.examples[int(len(self.examples) * (self.split_ratios[0] + self.split_ratios[1])):]
-        #else:
         if type == "init":
             # print(dir)
             self.cover_file = os.path.join(dir, "cover.txt")
@@ -197,17 +187,6 @@ class KGSteganalysisProcessor(object):
                     self.word2id[word] = id
                     self.id2word[id] = word
                     id += 1
-                # concepts_tokenizer = {"<pad>":0, "<s>":1, "</s>":2}
-                # concepts_tokenizer_reverse = {0:"<pad>", 1:"<s>", 2:"</s>"}
-                # concept_id = 3
-                # for example in self.examples:
-                #     for concept in example.concepts:
-                #         if concepts_tokenizer.get(concept, None) is None:
-                #             concepts_tokenizer[concept] = concept_id
-                #             concepts_tokenizer_reverse[concept_id] = concept
-                #             concept_id +=1
-                #
-                # self.tokenizer = concepts_tokenizer
             else:
                 if self.tokenizer.pad_token is None:
                     self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -254,11 +233,6 @@ class KGSteganalysisProcessor(object):
                 label_id = -1
 
 
-            # _concept_ids, _concept_labels, _concept_distances = self.encode_concept(
-            #     self.concept2id, example.concepts, example.concepts_labels, example.distances, self.max_concept_length, return_tensors="")
-            # relations = [x[0] for x in example.relations]
-            # _head_ids, _tail_ids, _relation_ids, _triple_labels = self.encode_triples(
-            #     example.head_ids, example.tail_ids, relations, example.triple_labels, self.max_triple_len,return_tensors="")
             _concept_ids, _edges, adj =  self.encode_graph(self.concept2id, example.concepts, example.distances, example.head_ids,
                                                       example.tail_ids,self.max_concept_length,return_tensors="")
 
@@ -279,9 +253,6 @@ class KGSteganalysisProcessor(object):
 
 
         oracle_concept_ids, oracle_concept_mask = None, None
-        # if self.train:
-        #     oracle_concept_ids, oracle_concept_mask, _ = self.encode_oracle_concept(
-        #         self.concept2id, _concept, _cpt_label, _dist, max_oracle_concept_length)
 
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
@@ -289,12 +260,6 @@ class KGSteganalysisProcessor(object):
         all_label_ids = torch.tensor([f.label_ids for f in features], dtype=torch.long)
         all_concepts_ids = torch.tensor([f.concepts_ids for f in features], dtype=torch.long)
         all_concepts_adjs = torch.tensor([f.concepts_adj for f in features], dtype=torch.long)
-        # all_concepts_labels = torch.tensor([f.concepts_labels for f in features], dtype=torch.long)
-        # all_distances = torch.tensor([f.distances for f in features], dtype=torch.long)
-        # all_head_ids = torch.tensor([f.head_ids for f in features], dtype=torch.long)
-        # all_tail_ids = torch.tensor([f.tail_ids for f in features], dtype=torch.long)
-        # all_relations_ids = torch.tensor([f.relations_ids for f in features], dtype=torch.long)
-        # all_triple_labels = torch.tensor([f.triple_labels for f in features], dtype=torch.long)
 
 
         dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids, all_concepts_ids, all_concepts_adjs)
@@ -423,20 +388,4 @@ class KGSteganalysisProcessor(object):
         return self.label_list
 
 
-if __name__ == '__main__':
-    '''
-    function testing
-    '''
 
-    from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained("facebook/bart-base")
-
-    #processor = KGSteganalysisProcessor(tokenizer)
-    #processor.get_examples("./dataset/ac")
-    #data = processor.convert_examples_to_features(processor.get_train_examples("./dataset/ac"))
-
-    print()
-    # get_examples = processor.get_train_examples
-    # _, examples = get_examples('../data')
-    # processor.get_test_examples("../data")
-    # processor.get_dev_examples("../data")
