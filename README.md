@@ -1,2 +1,1 @@
-# LINK
-This is codes for our work "LINK: LINGUISTIC STEGANALYSIS FRAMEWORK WITH EXTERNAL KNOWLEDGE"
+## LINK: LINguitstic steganalysis framework with external Knowledge
