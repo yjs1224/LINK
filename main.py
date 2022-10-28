@@ -598,7 +598,7 @@ if __name__ == '__main__':
 
     os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
     parser = argparse.ArgumentParser(description="argument for generation")
-    parser.add_argument("--config_path", type=str, default="./final_kconfigs/KE/CNN-movie-ac.json")
+    parser.add_argument("--config_path", type=str, default="./configs/KE/CNN-movie-ac.json")
     parser.add_argument("--kn", type=int, default=45)
     args = parser.parse_args()
     Configs = utils.Config(args.config_path).get_configs()
