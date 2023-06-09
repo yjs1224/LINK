@@ -2,7 +2,7 @@
 
 
 
-# For details of the methods and results, please refer to our paper.
+### For details of the methods and results, please refer to our paper.
 ```bibtex
 @inproceedings{yang2023link,
   title={LINK: Linguistic Steganalysis Framework with External Knowledge},
