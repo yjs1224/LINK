@@ -1,6 +1,4 @@
-## LINK: LINguitstic steganalysis framework with external Knowledge
-
-
+## [LINK: LINguitstic steganalysis framework with external Knowledge](https://ieeexplore.ieee.org/abstract/document/10097161)
 
 ### For details of the methods and results, please refer to our paper.
 ```bibtex
