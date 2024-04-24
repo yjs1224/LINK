@@ -94,6 +94,25 @@ class SteganalysisProcessor(object):
                 if label_t == "1":
                     label = 1
                 examples.append(InputExample(sentence=sentence, label=label))
+        # if self.use_vocab:
+        #     doc = []
+        #     for example in examples:
+        #         doc.append(example.sentence)
+        #     doc = " ".join(doc)
+        #     from collections import Counter
+        #     items = sorted(Counter(doc.split()).items(), key=lambda x: x[1], reverse=True)
+        #     self.word2id = {"[PAD]": 0, "[UNK]": 1}
+        #     self.id2word = {0: "[PAD]", 1: "[UNK]"}
+        #     id = 2
+        #     for word, _ in items[:self.vocab_size-2]:
+        #         self.word2id[word] = id
+        #         self.id2word[id] = word
+        #         id += 1
+        # else:
+        #     if self.tokenizer.pad_token is None:
+        #         self.tokenizer.pad_token = self.tokenizer.eos_token
+        # dataset = self.convert_examples_to_features(examples)
+        # return dataset, examples
         return examples
 
 

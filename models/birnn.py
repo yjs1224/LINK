@@ -80,3 +80,35 @@ class TC(nn.Module):
 		)
 
 
+class BERT_TC(BertPreTrainedModel):
+	def __init__(self, config, **kwargs):
+		super().__init__(config)
+		self.class_num = kwargs["class_num"]
+		self.dropout_rate = kwargs["dropout_rate"]
+		self.cell = kwargs["cell"]
+		self.hidden_dim = kwargs["hidden_dim"]
+		self.num_layers = kwargs["num_layers"]
+		self.embed_size = config.hidden_size  # not kwags["embed_size"]
+		self.plm_config = config
+
+		self.bert = BertModel(self.plm_config)
+		self.classifier = TC_base(self.cell, self.embed_size, self.hidden_dim, self.num_layers, self.class_num, self.dropout_rate)
+		if kwargs["criteration"] == "CrossEntropyLoss":
+			self.criteration = nn.CrossEntropyLoss()
+		else:
+			# default loss
+			self.criteration = nn.CrossEntropyLoss()
+
+
+	def extra_repr(self) -> str:
+		return 'bert word embedding dim:{}'.format(
+			self.embed_size
+		)
+
+
+	def forward(self,input_ids, labels, attention_mask, token_type_ids):
+		outputs = self.bert(input_ids, attention_mask, token_type_ids)
+		embedding = outputs[0]
+		logits = self.classifier(embedding)
+		loss = self.criteration(logits, labels)
+		return loss, logits

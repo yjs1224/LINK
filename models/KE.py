@@ -187,7 +187,6 @@ class LSTMATT_base(nn.Module):
         # return logits
 
 
-
 class GATLayer(nn.Module):
     def __init__(self, in_features, out_features, dropout, alpha, concat=True, get_att=False):
         super(GATLayer, self).__init__()
@@ -258,7 +257,6 @@ class GAT(nn.Module):
         return x
 
 
-
 class TC(nn.Module):
     def __init__(self, vocab_size, tfe, tfe_configs, class_num, readout_size, gat_alpha,
                  gat_heads, dropout_rate, concept_embedding_path, criteration="CrossEntropyLoss", ):
@@ -314,7 +312,10 @@ class TC(nn.Module):
             assert 0, "No such text features extractor, only support cnn rnn & fc"
 
         concept_embedding = pkl.load(open(self.concept_embedding_path, "rb"))
+        #self.concept_embedding = nn.Embedding.from_pretrained(
+        #    torch.FloatTensor(torch.from_numpy(concept_embedding["embedding"].astype(np.float32))))
         self.concept_embedding = nn.Embedding(len(list(concept_embedding["vocab"].items())), 128)
+        # self.concept_embedding = nn.Embedding(10000, 128)
         self.embedding = nn.Embedding(self.vocab_size, 128)
 
         self.gat = GAT(
@@ -325,13 +326,17 @@ class TC(nn.Module):
             n_heads=self.gat_heads,
             dropout=self.dropout_rate
         )
+        # self.output_layer = nn.Linear(self.readout_size, self.class_num)
+        # self.normalization = nn.BatchNorm1d(self.readout_size)
         self.output_layer = nn.Linear(self.text_out_features + self.readout_size, self.class_num)
         self.normalization = nn.BatchNorm1d(self.text_out_features + self.readout_size)
         if criteration == "CrossEntropyLoss":
             self.criteration = nn.CrossEntropyLoss()
+            # self.criteration = focal_loss()
         else:
             # default loss
             self.criteration = nn.CrossEntropyLoss()
+            # self.criteration = focal_loss()
 
     def forward(self, input_ids, concept_ids, head=None, tail=None, relation=None, distance=None, triple_label=None,
                 attention_mask=None, token_type_ids=None,
@@ -349,18 +354,116 @@ class TC(nn.Module):
             mask = torch.ones_like(input_ids.long())
             mask[input_ids.long() != 0] = 0
             text_features = self.text_feature_extractor(embedding, mask, input_ids_len)
-        elif self.TFE_name == "sesy":
-            text_features = self.text_feature_extractor(embedding, graph)
         elif self.TFE_name == "gnn":
             text_features = self.text_feature_extractor(input_ids)
         else:
             text_features = self.text_feature_extractor(embedding)
 
         features = torch.cat([text_features, gat_out_pool], dim=1)
+        # features = torch.cat([ gat_out_pool], dim=1)
+        # features = torch.cat([text_features, gat_out_pool[:,self.num,:], ], dim=1)
         features = self.normalization(features)
         logits = self.output_layer(features)
         loss = self.criteration(logits, labels)
         return loss, logits
 
+
+class BERT_TC(BertPreTrainedModel):
+    def __init__(self, config, **kwargs):
+        super().__init__(config)
+        TFE_configs = kwargs["tfe_configs"]
+        # print(TC_configs)
+        self.embed_size = config.hidden_size
+        self.TFE_name = kwargs["tfe"]
+        self.dropout_rate = kwargs["dropout_rate"]
+        self.class_num = kwargs["class_num"]
+        self.readout_size = kwargs["readout_size"]
+        self.gat_alpha = kwargs["gat_alpha"]
+        self.gat_heads = kwargs["gat_heads"]
+        self.concept_embedding_path = kwargs["concept_embedding_path"]
+        self.bert_config = config
+        self.num = 0
+
+        if self.TFE_name == "cnn":
+            self.TFE_configs = TFE_configs.cnn
+            self.TFE_configs.in_features = self.embed_size
+            # self.text_out_features = self.TFE_configs.in_features * len(self.TFE_configs.filter_size)
+            self.text_feature_extractor = CNN_base(
+                **{**self.TFE_configs, "class_num": self.class_num, "dropout_rate": self.dropout_rate})
+            self.text_out_features = self.text_feature_extractor.out_hidden_dim
+        elif self.TFE_name == "fcn":
+            self.TFE_configs = TFE_configs.fc
+            self.TFE_configs.in_features = self.embed_size
+            # self.text_out_features = self.embed_size
+            self.text_feature_extractor = FCN_base(
+                **{**self.TFE_configs, "class_num": self.class_num, "dropout_rate": self.dropout_rate})
+            self.text_out_features = self.text_feature_extractor.out_hidden_dim
+
+        elif self.TFE_name == "rnn":
+            self.TFE_configs = TFE_configs.rnn
+            self.TFE_configs.in_features = self.embed_size
+            self.text_feature_extractor = RNN_base(
+                **{**self.TFE_configs, "class_num": self.class_num, "dropout_rate": self.dropout_rate})
+            self.text_out_features = self.text_feature_extractor.out_hidden_dim
+        elif self.TFE_name == "lstmatt":
+            self.TFE_configs = TFE_configs.lstmatt
+            self.TFE_configs.in_features = self.embed_size
+
+            self.text_feature_extractor = LSTMATT_base(
+                **{**self.TFE_configs, "class_num": self.class_num, "dropout_rate": self.dropout_rate})
+            self.text_out_features = self.text_feature_extractor.out_hidden_dim
+        else:
+            assert 0, "No such text features extractor, only support cnn rnn & fc"
+
+        concept_embedding = pkl.load(open(self.concept_embedding_path, "rb"))
+        # concept_size, concept_dim = concept_embedding["embedding"].shape
+        self.concept_embedding = nn.Embedding.from_pretrained(
+            torch.FloatTensor(torch.from_numpy(concept_embedding["embedding"].astype(np.float32))))
+        #self.bert = BertModel(config) #文字embedding
+        self.embedding = nn.Embedding(50000, self.embed_size)
+
+        self.gat = GAT(
+            n_feat=300,
+            n_hid=self.readout_size,
+            out_features=self.readout_size,
+            alpha=self.gat_alpha,
+            n_heads=self.gat_heads,
+            dropout=self.dropout_rate
+        )
+
+        self.output_layer = nn.Linear(self.text_out_features + self.readout_size, self.class_num)
+        self.normalization = nn.BatchNorm1d(self.text_out_features + self.readout_size)
+        if kwargs["criteration"] == "CrossEntropyLoss":
+            self.criteration = nn.CrossEntropyLoss()
+            # self.criteration = focal_loss()
+        else:
+            # default loss
+            self.criteration = nn.CrossEntropyLoss()
+            # self.criteration = focal_loss()
+
+    def forward(self, input_ids, concept_ids, head=None, tail=None, relation=None, distance=None, triple_label=None,
+                attention_mask=None, token_type_ids=None,
+                labels=None, graph=None, concepts_adj=None):
+        embedding = self.embedding(input_ids)
+
+        node_repr = self.gat(self.concept_embedding(concept_ids), concepts_adj)
+        gat_out_pool = node_repr[:, 0, :]
+
+        if self.TFE_name == "lstmatt":
+            input_ids_len = torch.sum(input_ids != 0, dim=-1).float()
+            mask = torch.ones_like(input_ids.long())
+            mask[input_ids.long() != 0] = 0
+            text_features = self.text_feature_extractor(embedding, mask, input_ids_len)
+        elif self.TFE_name == "sesy":
+            text_features = self.text_feature_extractor(embedding, graph)
+        else:
+            text_features = self.text_feature_extractor(embedding)
+        features = torch.cat([text_features, gat_out_pool], dim=1)
+        #print(self.embed_size)
+        # features = torch.cat([text_features, gat_out_pool[:,self.num,:], ], dim=1)
+        features = self.normalization(features)
+        logits = self.output_layer(features)
+        loss = self.criteration(logits, labels)
+        return loss, logits
 
 
